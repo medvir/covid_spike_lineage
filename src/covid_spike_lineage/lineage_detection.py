@@ -37,10 +37,6 @@ import shutil
 import sys
 
 
-log_format = '%(levelname)s %(asctime)s %(filename)s: %(funcName)s() %(lineno)d: \t%(message)s'
-logging.basicConfig(filename='S_gene.log', level=logging.INFO, 
-                            format=log_format, datefmt='%Y/%m/%d %H:%M:%S')
-
 def run_cmd(cmd, exe='/bin/bash'):
     '''check_output if needed gives the error code'''
     try:
@@ -218,14 +214,15 @@ def main(seq_dir_path, ext):
         
     for seq_file in glob.glob(ext_string):
         
+        molis_number = seq_file.split('_')[0]
+        if molis_number in patient_dict:
+            patient_dict[molis_number] += 1
+        else:
+            patient_dict[molis_number] = 1
+        
+        file_name = os.path.splitext(seq_file)[0]
+        
         if ext == 'ab1':
-            molis_number = seq_file.split('_')[0]
-            if molis_number in patient_dict:
-                patient_dict[molis_number] += 1
-            else:
-                patient_dict[molis_number] = 1
-            
-            file_name = os.path.splitext(seq_file)[0]
             fastq_file = '%s.fastq' %file_name
             cmd = 'seqret -sformat abi -osformat fastq  -auto -stdout -sequence %s > %s' % (seq_file, fastq_file)
             run_cmd(cmd)
