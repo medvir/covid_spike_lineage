@@ -28,3 +28,31 @@ The sequences should be in ab1 or fasta file format. It is possible to have seve
 - pandas > 1.0.0
 - mafft
 - tabulate
+
+## Installation
+The installations ``` python setup.py install ``` or ```pip install``` works. 
+
+## Usage
+Run 
+
+
+```
+covid_spike_lineage
+```  
+
+
+in the ab1 files directory.
+
+or run the following command 
+
+
+```
+covid_spike_lineage [OPTIONS]
+
+Options:
+    -d --directory  Folder to input file and output files including the pdf report. [Default: The currecnt working directory]
+    -e --extention  The input files extensions. options are fasta or ab1. [Default: ab1]
+```
+
+
+ 
