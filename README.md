@@ -1,6 +1,6 @@
 # Identify interesting lineages of SARS-CoV-2 virus based on a part of Spike gene. 
 
-Detect the following interesting lineages from a part of Spike sequence considering mutations in the range of (aa403 to 690) using ab1 or fasta files:
+Detect the following interesting lineages from a part of Spike sequence considering mutations in the range of (aa403 to 760) using ab1 or fasta files:
 
 
 - B.1.1.7
@@ -16,7 +16,7 @@ Detect the following interesting lineages from a part of Spike sequence consider
 - B.1.617.3
 
 
-The sequences should be in ab1 or fasta file format. It is possible to have several overlapping sequences for the same patient. The files beloning to the same patinet should start with a patient number in the following format:
+The sequences should be in ab1 or fasta file format. It is possible to have several overlapping sequences for the same patient. The files belonging to the same patient should start with a patient number in the following format:
 `[PATINET_NUMBER]_*.ab1` or `[PATINET_NUMBER]_*.fasta`
 
 

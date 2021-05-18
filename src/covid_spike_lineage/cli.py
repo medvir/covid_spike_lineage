@@ -16,8 +16,8 @@ except:
     __version__ = 'unknown'
 
 parser = argparse.ArgumentParser(description='Detect interesting lineages from'
-                                 ' a part of Spike Sanger sequences smaller than' 
-                                 ' (aa 403 to aa 690).'
+                                 ' a part of Spike Sanger sequences smaller than'
+                                 ' (aa 403 to aa 760).'
                                      , formatter_class=RawTextHelpFormatter)
 
 sanger_path = os.path.abspath(os.getcwd())
@@ -33,15 +33,16 @@ parser.add_argument('-e','--extention', dest='ext', type=str,
 
 parser.add_argument('-v','--version', action='version', version=__version__)
 
-args = parser.parse_args()
+#args = parser.parse_args()
 
 def main(args=None):
 
     import logging
     import logging.handlers
 
+    
     args = parser.parse_args(args=args)
-
+    
     log_format = '%(levelname)s %(asctime)s %(filename)s: %(funcName)s() %(lineno)d: \t%(message)s'
 
     log_full_path = os.path.join(args.seq_dir_path,'S_gene_lineage.log')

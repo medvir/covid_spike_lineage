@@ -36,6 +36,7 @@ import re
 import shutil
 import sys
 
+CRITICAL_POS = [417,439,452,453,477, 478,484,501,518,570,614,655,677,681,701,716]
 
 def run_cmd(cmd, exe='/bin/bash'):
     '''check_output if needed gives the error code'''
@@ -50,14 +51,12 @@ def run_cmd(cmd, exe='/bin/bash'):
 
 def is_aligned_fun(row):
     
-    # check if alignment covers mutation 417 and 690
-    # start of S-gene is at 21579. 
-    # 21579 + (681 * 3) = 23622 the last mutation position 
-    # with respect to S-gene. 
-    if (row['alignmentStart'] < 22811  and row['alignmentEnd'] > 23622):
-        return 'ok'
-    else:
-        return 'n'
+    # check if alignment covers mutation 417 to 690
+    # start of S-gene is at 21563. 
+     
+    start_aa = int((int(row['alignmentStart']) - 21563)/3)+1
+    end_aa = int((int(row['alignmentEnd']) - 21563)/3)+1
+    return '%s-%s' %(start_aa , end_aa)
 
 def calc_quality(row):
     if (row['qc.mixedSites.totalMixedSites'] < 20 and
@@ -68,19 +67,19 @@ def calc_quality(row):
     else:
         return 'bad'
 
-def create_md(nextclade_page1, nextclade_page2, nextclade_page3):
+def create_md(nextclade_page1, nextclade_page2, nextclade_page3, nextclade_page4):
     logging.info('Writing report in markdown')
     md_rh = open('result.md', 'w')
     full_dir_name = os.getcwd()
     dir_name = os.path.basename(full_dir_name)    
-    print('S-gene Sanger sequencing %s report \n' %dir_name , file=md_rh)
+    print('SARS-CoV-2 S-gene Sanger sequencing %s report \n' %dir_name , file=md_rh)
     date_title = time.strftime("%d-%m-%Y")
     print('date: %s' %date_title, file=md_rh)
     print('==================\n', file=md_rh)
     print(nextclade_page1.to_markdown() , file=md_rh)
     print('\n', file=md_rh)
     
-    print('\pagebreak', file=md_rh)
+    #print('\pagebreak', file=md_rh)
     print('\n', file=md_rh)
     print(nextclade_page2.to_markdown() , file=md_rh)
     print('\n', file=md_rh)
@@ -88,6 +87,12 @@ def create_md(nextclade_page1, nextclade_page2, nextclade_page3):
     print('\pagebreak', file=md_rh)
     print('\n', file=md_rh)
     print(nextclade_page3.to_markdown() , file=md_rh)
+    print('\n', file=md_rh)
+    
+    #print('\pagebreak', file=md_rh)
+    print('\n', file=md_rh)
+    print(nextclade_page4.to_markdown() , file=md_rh)
+    print('\n', file=md_rh)
     
     md_rh.close()
         
@@ -109,8 +114,54 @@ def convert_2_pdf(sample_id='', version='unknown'):
     logging.debug(pand_cml)
     subprocess.call(pand_cml, shell=True)
     
+def range_nc_2_aa(pos_ls):
+    amb_flag = 'n'
+    aa_pos_ls = []
+    for nc_pos in pos_ls:
+        if '-' in nc_pos:
+            range_ls = nc_pos.split('-')
+            aa_low = int((int(range_ls[0]) - 21563)/3)+1
+            aa_high = int((int(range_ls[1]) - 21563)/3)+1
+            if any(aa_pos in CRITICAL_POS for aa_pos in range(aa_low,aa_high+1)):
+                amb_flag = 'y'
+            aa_str = '%s-%s' %(aa_low,aa_high)
+            aa_pos_ls.append(aa_str)
+        else:
+            aa_pos = int((int(nc_pos) - 21563)/3)+1
+            aa_pos_ls.append(aa_pos)
+            if aa_pos in CRITICAL_POS:
+                amb_flag = 'y'
+            
+    return aa_pos_ls, amb_flag
     
+def nc_2_aa(row):
+    """" convert nucleotide positions to aa positions
+    if ambiguous characters are in important positions, set the amb_flag"""
+    aa_amb_pos_ls = []
+    amb_flag = 'n'
+    amb_flag1 = 'n'
+    amb_flag2 = 'n'
+    if not pd.isnull(row['nonACGTNs']):
+        amb_string = row['nonACGTNs']
+        amb_pos = re.sub('[A-Z]:', '', amb_string)
+        nc_pos_ls = [nc_pos for nc_pos in amb_pos.split(',')]
+        aa_amb_pos_ls, amb_flag1 = range_nc_2_aa(nc_pos_ls)
+    
+    aa_missing_pos_ls = []
+    if not pd.isnull(row['missing']):
+        missing_pos = row['missing']
+        nc_pos_ls = [nc_pos for nc_pos in missing_pos.split(',')]
+        aa_missing_pos_ls, amb_flag2 = range_nc_2_aa(nc_pos_ls)
+    
+    if amb_flag1 == 'y' or amb_flag2 == 'y':
+        amb_flag = 'y'
+    aa_pos_ls = []
+    aa_pos_ls = aa_amb_pos_ls + aa_missing_pos_ls
+    return aa_pos_ls, amb_flag
+
 def detect_lineage(row):
+    
+    lineage=''
     
     if not pd.isnull(row['aaSubstitutions']):
         if re.search('S:[A-Z]614G', row['aaSubstitutions']):
@@ -153,9 +204,12 @@ def detect_lineage(row):
         else:
             lineage = 'not concerned lineage'
         
+        if not lineage:
+            lineage = 'important mutations, no lineage'
         return lineage
     else:
-        return 'n' 
+        lineage = 'n'
+        return lineage
 
 def create_consensus(patient_multiple_sequences_dict):
     
@@ -186,8 +240,8 @@ def create_consensus(patient_multiple_sequences_dict):
         alignment = AlignIO.read(StringIO(stdout), "fasta")
         summary_align = AlignInfo.SummaryInfo(alignment)
         consensus = summary_align.dumb_consensus(threshold=0.2, ambiguous='N')
-        seq_id = '%s_consensus' %key
-        my_cons = SeqRecord(consensus, id = seq_id)
+        seq_id = '%s_cons' %key
+        my_cons = SeqRecord(consensus, id=seq_id, description='')
 
         out_file = '%s_final.fasta' %key
         
@@ -234,7 +288,7 @@ def main(seq_dir_path, ext):
             run_cmd(cmd)
         
             if '_R' in file_name:
-                cmd = 'revseq -sequence %s_trim.fasta -outseq %s_final.fasta' %(file_name,file_name)
+                cmd = 'revseq -sequence %s_trim.fasta -outseq %s_final.fasta -tag N' %(file_name,file_name)
                 run_cmd(cmd)
             elif '_F' in file_name:
                 source_file = '%s_trim.fasta' %(file_name)
@@ -242,7 +296,7 @@ def main(seq_dir_path, ext):
                 shutil.copy(source_file, dest_file)
         else:
             if '_R' in file_name:
-                cmd = 'revseq -sequence %s.fasta -outseq %s_final.fasta' %(file_name,file_name)
+                cmd = 'revseq -sequence %s.fasta -outseq %s_final.fasta -tag N' %(file_name,file_name)
                 run_cmd(cmd)
             elif '_F' in file_name:
                 source_file = '%s.fasta' %(file_name)
@@ -262,7 +316,7 @@ def main(seq_dir_path, ext):
     
     # run nextclade
     logging.info('Run nextclade')
-    cmd = "docker run -it --rm -u 1000 --volume='%s:/seq' neherlab/nextclade \
+    cmd = "docker run -t --rm -u 1000 --volume='%s:/seq' neherlab/nextclade \
         nextclade --input-fasta '/seq/all_final.fasta' --output-tsv '/seq/%s' \
             --user '$(id -u):$(id -g)'" %(seq_dir_path, result_file)
     run_cmd(cmd)
@@ -271,37 +325,39 @@ def main(seq_dir_path, ext):
     columns = ['seqName', 'clade', 'aaSubstitutions', 'alignmentEnd', 
                'alignmentStart', 'qc.mixedSites.totalMixedSites', 
                'qc.privateMutations.total', 'qc.missingData.totalMissing', 
-               'qc.snpClusters.totalSNPs','substitutions']
+               'qc.snpClusters.totalSNPs','substitutions', 'nonACGTNs', 'missing']
     
     nextclade_res_df = nextclade_df[columns]
     
     #Check if the important positions are sequenced
     nextclade_res_df['Alignment'] = nextclade_res_df.apply(is_aligned_fun, axis=1)
-    
     #Calculate the quality
     nextclade_res_df['quality'] = nextclade_res_df.apply(calc_quality, axis=1)
-    
+    # Identify lineages using mutations in S-gene:403 to 760
     nextclade_res_df['lineage'] = nextclade_res_df.apply(detect_lineage, axis=1)
+    nextclade_res_df[['ambiguous_pos','amb_flag']] = nextclade_res_df.apply(nc_2_aa, axis=1, result_type="expand")
     
-    nextclade_res_df['seqName'] = nextclade_res_df['seqName'].map(lambda x: x.rstrip('Reveresed:'))
-    nextclade_res_df['seqName'] = nextclade_res_df['seqName'].map(lambda x: x.rstrip('<unknown description>'))
+    #Modifications for the report
+    nextclade_res_df['ambiguous_pos'] = nextclade_res_df['ambiguous_pos'].astype(str).str.wrap(30)
+    nextclade_res_df['aaSubstitutions'] = nextclade_res_df['aaSubstitutions'].astype(str).str.wrap(30)
+    nextclade_res_df['substitutions'] = nextclade_res_df['substitutions'].astype(str).str.wrap(30)
     
-    nextclade_res_df['aaSubstitutions'] = nextclade_res_df['aaSubstitutions'].str.wrap(30)
-
     col_drops = ['alignmentEnd','alignmentStart', 'qc.mixedSites.totalMixedSites', 
                  'qc.privateMutations.total', 'qc.missingData.totalMissing', 
-                 'qc.snpClusters.totalSNPs', 'clade']
+                 'qc.snpClusters.totalSNPs', 'clade', 'nonACGTNs', 'missing']
     nextclade_res_df.drop(col_drops, axis=1, inplace=True)
     
-    nextclade_res_page1_df = nextclade_res_df.drop([ 'aaSubstitutions','substitutions'], axis=1)    
-    col_drop_page2 = [ 'lineage','Alignment', 'quality', 'substitutions']
+    nextclade_res_page1_df = nextclade_res_df.drop([ 'aaSubstitutions','substitutions', 'ambiguous_pos'], axis=1)    
+    col_drop_page2 = [ 'lineage','Alignment', 'quality', 'substitutions', 'ambiguous_pos','amb_flag']
     nextclade_res_page2_df = nextclade_res_df.drop(col_drop_page2, axis=1)
-    col_drop_page3 = [ 'lineage','Alignment', 'quality', 'aaSubstitutions']
-    nextclade_res_page3_df = nextclade_res_df.drop(col_drop_page3, axis=1)
+    col_drop_page4 = [ 'lineage','Alignment', 'quality', 'aaSubstitutions', 'substitutions','amb_flag']
+    nextclade_res_page3_df = nextclade_res_df.drop(col_drop_page4, axis=1)
+    col_drop_page3 = [ 'lineage','Alignment', 'quality', 'aaSubstitutions', 'ambiguous_pos','amb_flag']
+    nextclade_res_page4_df = nextclade_res_df.drop(col_drop_page3, axis=1)    
     
-    create_md(nextclade_res_page1_df,nextclade_res_page2_df, nextclade_res_page3_df)
+    create_md(nextclade_res_page1_df,nextclade_res_page2_df, nextclade_res_page3_df, nextclade_res_page4_df)
     convert_2_pdf()
     
 if __name__ == "__main__":
-    seq_path = os.path.abspath(os.getcwd())        
+    seq_path = os.path.abspath(os.getcwd())
     main(seq_dir_path=seq_path, ext = 'ab1')
