@@ -6,8 +6,8 @@ Detect the following interesting lineages from a part of Spike sequence consider
 - B.1.1.7
 - SA:B.1.351
 - Brazil:P.1
-- Brazil:P.3
-- Brazil:P.2 
+- Brazil:P.2
+- P.3 
 - B.1.525
 - B.1.526
 - Cal B.1.427/B.1.429
